@@ -17,10 +17,10 @@ const (
 	BucketSec1h = 3600
 	BucketSec1d = 86400
 
-	metaKeyRollupsReady             = "rollups_ready"
-	metaKeyBackfillStartedAt        = "rollups_backfill_started_at"
-	metaKeyBackfillFinishedAt       = "rollups_backfill_finished_at"
-	backfillChunkSize               = 10000
+	metaKeyRollupsReady       = "rollups_ready"
+	metaKeyBackfillStartedAt  = "rollups_backfill_started_at"
+	metaKeyBackfillFinishedAt = "rollups_backfill_finished_at"
+	backfillChunkSize         = 10000
 )
 
 type DataSource int
@@ -142,6 +142,48 @@ func (s *Store) insertAt(ts int64, value float64) error {
 	}
 	defer tx.Rollback()
 
+	if err := insertSampleTx(tx, ts, value); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// InsertBatch writes raw samples and rollup upserts in chunked transactions.
+// An empty slice is a no-op.
+func (s *Store) InsertBatch(samples []models.TempPoint) error {
+	if len(samples) == 0 {
+		return nil
+	}
+
+	for start := 0; start < len(samples); start += backfillChunkSize {
+		end := start + backfillChunkSize
+		if end > len(samples) {
+			end = len(samples)
+		}
+		if err := s.insertBatchChunk(samples[start:end]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) insertBatchChunk(samples []models.TempPoint) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	for _, p := range samples {
+		if err := insertSampleTx(tx, p.Timestamp, p.Value); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func insertSampleTx(tx *sql.Tx, ts int64, value float64) error {
 	if _, err := tx.Exec(
 		`INSERT INTO temperature_samples(ts, value) VALUES (?, ?)`,
 		ts,
@@ -156,11 +198,7 @@ func (s *Store) insertAt(ts int64, value float64) error {
 	if err := upsertRollupTx(tx, "temperature_rollups_1h", BucketSec1h, ts, value); err != nil {
 		return err
 	}
-	if err := upsertRollupTx(tx, "temperature_rollups_1d", BucketSec1d, ts, value); err != nil {
-		return err
-	}
-
-	return tx.Commit()
+	return upsertRollupTx(tx, "temperature_rollups_1d", BucketSec1d, ts, value)
 }
 
 func upsertRollupTx(tx *sql.Tx, table string, bucketSec, ts int64, value float64) error {

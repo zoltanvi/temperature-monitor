@@ -155,6 +155,35 @@ func TestTransactionalInsertNoOrphan(t *testing.T) {
 	}
 }
 
+func TestInsertBatch(t *testing.T) {
+	store := openTempStore(t)
+	base := int64(1_700_000_000)
+	samples := []models.TempPoint{
+		{Timestamp: base, Value: 10},
+		{Timestamp: base + 1, Value: 20},
+		{Timestamp: base + 2, Value: 30},
+	}
+	if err := store.InsertBatch(samples); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := store.GetTemperaturesFromRange(base, base+2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("got %d samples", len(got))
+	}
+
+	rows, err := store.GetRollups(SourceRollup1m, base, base+2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].Count != 3 || rows[0].Sum != 60 {
+		t.Fatalf("unexpected rollup: %+v", rows)
+	}
+}
+
 func openTempStore(t *testing.T) *Store {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "test.db")

@@ -39,11 +39,11 @@ type Statistics struct {
 
 // ResponseMeta carries request diagnostics for the UI status line.
 type ResponseMeta struct {
-	NoData              bool   `json:"noData"`
-	DataSource          string `json:"dataSource"`
-	ProcessedSamples    int    `json:"processedSamples"`
-	LastSampleAgeSec    *int64 `json:"lastSampleAgeSec"`
-	DBSizeBytes         int64  `json:"dbSizeBytes"`
+	NoData           bool   `json:"noData"`
+	DataSource       string `json:"dataSource"`
+	ProcessedSamples int    `json:"processedSamples"`
+	LastSampleAgeSec *int64 `json:"lastSampleAgeSec"`
+	DBSizeBytes      int64  `json:"dbSizeBytes"`
 }
 
 type TemperatureApiResponse struct {
@@ -54,10 +54,14 @@ type TemperatureApiResponse struct {
 
 // HealthResponse is returned by GET /api/v3/health.
 type HealthResponse struct {
-	OK               bool   `json:"ok"`
-	UptimeSec        int64  `json:"uptimeSec"`
-	RollupsReady     bool   `json:"rollupsReady"`
-	LastSampleAgeSec *int64 `json:"lastSampleAgeSec"`
-	LastSampleTs     *int64 `json:"lastSampleTs"`
-	DBSizeBytes      int64  `json:"dbSizeBytes"`
+	OK                  bool   `json:"ok"`
+	UptimeSec           int64  `json:"uptimeSec"`
+	RollupsReady        bool   `json:"rollupsReady"`
+	LastSampleAgeSec    *int64 `json:"lastSampleAgeSec"`
+	LastSampleTs        *int64 `json:"lastSampleTs"`
+	DBSizeBytes         int64  `json:"dbSizeBytes"`
+	PendingSamples      int    `json:"pendingSamples"`
+	OldestPendingAgeSec *int64 `json:"oldestPendingAgeSec"`
+	LastFlushUnix       int64  `json:"lastFlushUnix"`
+	LastFlushError      string `json:"lastFlushError"`
 }

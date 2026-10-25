@@ -27,16 +27,15 @@ esac
 OUT_DIR="build/$DIR"
 mkdir -p "$OUT_DIR"
 
-for PKG in ./cmd/api ./cmd/sensor; do
-    BINARY_NAME=${PKG##*/}
-    OUT_FILE="$OUT_DIR/$BINARY_NAME$EXT"
+PKG=./cmd/tempmonitor
+BINARY_NAME=tempmonitor
+OUT_FILE="$OUT_DIR/$BINARY_NAME$EXT"
 
-    echo "Building $PKG -> $OUT_FILE ($GOOS/$GOARCH)"
-    GOOS=$GOOS GOARCH=$GOARCH go build -o "$OUT_FILE" "$PKG" || exit 1
+echo "Building $PKG -> $OUT_FILE ($GOOS/$GOARCH)"
+GOOS=$GOOS GOARCH=$GOARCH go build -o "$OUT_FILE" "$PKG" || exit 1
 
-    if [ "$GOOS" = "linux" ]; then
-        chmod +x "$OUT_FILE"
-    fi
-done
+if [ "$GOOS" = "linux" ]; then
+    chmod +x "$OUT_FILE"
+fi
 
 echo "Done."

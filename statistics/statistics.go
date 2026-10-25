@@ -105,3 +105,68 @@ func GenerateStatisticsFromRollups(
 
 	return stats
 }
+
+// RollupSumCount returns the combined sum and count across rollup buckets.
+func RollupSumCount(data []models.RollupBucket) (sum float64, count int64) {
+	for _, b := range data {
+		sum += b.Sum
+		count += b.Count
+	}
+	return sum, count
+}
+
+// MergeBufferIntoRollupStats folds unflushed raw samples into rollup-based stats.
+// Band times stay approximate. CurrentTemp uses lastTemperature. Min/max/mean
+// combine rollup totals with buffer points.
+func MergeBufferIntoRollupStats(
+	stats models.Statistics,
+	rollupSum float64,
+	rollupCount int64,
+	buffer []models.TempPoint,
+	lastTemperature models.TempPoint,
+) models.Statistics {
+	stats.CurrentTemp = lastTemperature.Value
+	if len(buffer) == 0 {
+		return stats
+	}
+
+	min := stats.Min
+	max := stats.Max
+	sum := rollupSum
+	count := rollupCount
+	haveExtrema := rollupCount > 0
+
+	if stats.StartTimestamp == 0 || buffer[0].Timestamp < stats.StartTimestamp {
+		stats.StartTimestamp = buffer[0].Timestamp
+	}
+	lastBuf := buffer[len(buffer)-1].Timestamp
+	if lastBuf > stats.EndTimestamp {
+		stats.EndTimestamp = lastBuf
+	}
+
+	for _, p := range buffer {
+		if !haveExtrema {
+			min = p.Value
+			max = p.Value
+			haveExtrema = true
+		} else {
+			if p.Value < min {
+				min = p.Value
+			}
+			if p.Value > max {
+				max = p.Value
+			}
+		}
+		sum += p.Value
+		count++
+	}
+
+	if haveExtrema {
+		stats.Min = min
+		stats.Max = max
+	}
+	if count > 0 {
+		stats.Mean = sum / float64(count)
+	}
+	return stats
+}
