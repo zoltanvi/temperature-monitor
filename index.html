@@ -1,0 +1,1409 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="icon" href="icons/favicon.svg" type="image/svg+xml" />
+        <title>Temperature Monitor</title>
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.min.css"
+        />
+        <link rel="stylesheet" href="themes.css" />
+        <style>
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+            }
+
+            body {
+                margin: 0;
+                font-family:
+                    system-ui,
+                    -apple-system,
+                    sans-serif;
+                background: var(--bg);
+                color: var(--text);
+                min-height: 100vh;
+            }
+
+            .page {
+                max-width: 1200px;
+                margin: 0 auto;
+                padding: 1rem;
+            }
+
+            .page-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                gap: 0.75rem;
+                margin-bottom: 1rem;
+                flex-wrap: wrap;
+            }
+
+            .page-header h1 {
+                margin: 0;
+                font-size: 1.25rem;
+                font-weight: 600;
+            }
+
+            .theme-picker {
+                display: flex;
+                align-items: center;
+                gap: 0.375rem;
+                flex-wrap: wrap;
+                min-width: 0;
+                justify-content: flex-end;
+            }
+
+            .theme-picker__divider {
+                width: 1px;
+                height: 1.375rem;
+                background: var(--border);
+                margin: 0 0.25rem;
+                flex-shrink: 0;
+            }
+
+            .theme-button {
+                appearance: none;
+                width: 1.375rem;
+                height: 1.375rem;
+                padding: 0;
+                border: 1px solid rgba(0, 0, 0, 0.1);
+                border-radius: 22%;
+                cursor: pointer;
+                background-color: var(--swatch-bg);
+                position: relative;
+                overflow: hidden;
+                transition:
+                    transform 0.15s ease,
+                    box-shadow 0.15s ease;
+                flex-shrink: 0;
+            }
+
+            .theme-button::after {
+                content: "";
+                position: absolute;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                height: 38%;
+                background: var(--swatch-accent);
+            }
+
+            .theme-button:hover {
+                transform: scale(1.06);
+            }
+
+            .theme-button[aria-pressed="true"] {
+                border-color: transparent;
+                box-shadow:
+                    0 0 0 2px var(--surface),
+                    0 0 0 4px var(--accent);
+            }
+
+            .error-banner {
+                display: none;
+                background: var(--error-bg);
+                color: var(--error-text);
+                padding: 0.5rem 0.75rem;
+                border-radius: 6px;
+                margin-bottom: 0.75rem;
+                font-size: 0.875rem;
+            }
+
+            .error-banner.visible {
+                display: block;
+            }
+
+            .controls {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.75rem;
+                align-items: center;
+                margin-bottom: 0.75rem;
+            }
+
+            .control-group {
+                display: flex;
+                align-items: center;
+                gap: 0.375rem;
+            }
+
+            .control-group label {
+                font-size: 0.8125rem;
+                color: var(--text-muted);
+            }
+
+            select,
+            input[type="number"],
+            .btn {
+                background: var(--surface);
+                color: var(--text);
+                border: 1px solid var(--border);
+                border-radius: 4px;
+                padding: 0.375rem 0.625rem;
+                font-size: 0.875rem;
+                cursor: pointer;
+            }
+
+            select,
+            input[type="number"] {
+                padding: 0.375rem 0.5rem;
+                cursor: default;
+            }
+
+            input[type="number"] {
+                width: 4.5rem;
+            }
+
+            .range-buttons {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.375rem;
+            }
+
+            .range-buttons button.active {
+                background: var(--accent);
+                border-color: var(--accent);
+                color: var(--on-accent);
+            }
+
+            .range-buttons button:hover:not(.active) {
+                background: var(--surface-hover);
+            }
+
+            .live-badge {
+                font-size: 0.75rem;
+                font-weight: 600;
+                color: var(--success);
+                letter-spacing: 0.05em;
+                opacity: 0;
+                transition: opacity 0.2s;
+            }
+
+            .live-badge.visible {
+                opacity: 1;
+            }
+
+            #chart-wrap {
+                position: relative;
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                overflow: hidden;
+                touch-action: none;
+                cursor: grab;
+                user-select: none;
+            }
+
+            #chart-wrap.dragging {
+                cursor: grabbing;
+            }
+
+            #chart-wrap.select-mode {
+                cursor: crosshair;
+            }
+
+            .chart-tooltip {
+                display: none;
+                position: absolute;
+                z-index: 5;
+                pointer-events: none;
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: 4px;
+                padding: 0.4rem 0.55rem;
+                font-size: 0.75rem;
+                line-height: 1.35;
+                color: var(--text);
+                box-shadow: 0 2px 8px var(--shadow);
+                white-space: nowrap;
+            }
+
+            .chart-tooltip.visible {
+                display: block;
+            }
+
+            .meta-status {
+                margin: 0.5rem 0 0;
+                font-size: 0.75rem;
+                color: var(--text-muted);
+                min-height: 1.1em;
+            }
+
+            .stat-note {
+                display: none;
+                margin-top: 0.2rem;
+                font-size: 0.65rem;
+                color: var(--text-muted);
+                font-weight: 400;
+                line-height: 1.2;
+            }
+
+            .stat-note.visible {
+                display: block;
+            }
+
+            .live-btn {
+                display: none;
+            }
+
+            .live-btn.visible {
+                display: inline-block;
+            }
+
+            .mode-toggle {
+                display: inline-flex;
+                border: 1px solid var(--border);
+                border-radius: 4px;
+                overflow: hidden;
+            }
+
+            .mode-toggle .mode-btn {
+                border: none;
+                border-radius: 0;
+            }
+
+            .mode-toggle .mode-btn + .mode-btn {
+                border-left: 1px solid var(--border);
+            }
+
+            .mode-toggle .mode-btn.active[data-mode="pan"] {
+                background: var(--accent);
+                color: var(--on-accent);
+            }
+
+            .mode-toggle .mode-btn.active[data-mode="select"] {
+                background: var(--warning);
+                color: var(--on-accent);
+            }
+
+            .mode-toggle .mode-btn:not(.active):hover {
+                background: var(--surface-hover);
+            }
+
+            .uplot .u-select {
+                background: color-mix(
+                    in srgb,
+                    var(--warning) 35%,
+                    transparent
+                ) !important;
+                z-index: 1;
+            }
+
+            .stats {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+                gap: 0.75rem;
+                margin-top: 1rem;
+            }
+
+            .stat-card {
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                padding: 0.75rem;
+            }
+
+            .stat-card .label {
+                font-size: 0.75rem;
+                color: var(--text-muted);
+                margin-bottom: 0.25rem;
+            }
+
+            .stat-card .value {
+                font-size: 1.125rem;
+                font-weight: 600;
+            }
+
+            .stat-card .value.placeholder {
+                color: var(--placeholder);
+            }
+
+            .thresholds {
+                margin-top: 0.75rem;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.75rem;
+                align-items: center;
+                font-size: 0.875rem;
+            }
+
+            .thresholds .critical-label {
+                color: var(--danger);
+            }
+
+            @media (max-width: 480px) {
+                .page {
+                    padding: 0.75rem;
+                }
+                .page-header h1 {
+                    font-size: 1.125rem;
+                }
+                .stat-card .value {
+                    font-size: 1rem;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="page">
+            <header class="page-header">
+                <h1>Temperature Monitor</h1>
+                <div
+                    class="theme-picker"
+                    id="theme-picker"
+                    role="group"
+                    aria-label="Color theme"
+                ></div>
+            </header>
+
+            <div id="error-banner" class="error-banner"></div>
+
+            <div class="controls">
+                <div class="range-buttons" id="range-buttons">
+                    <button type="button" class="btn" data-range="600">
+                        10m
+                    </button>
+                    <button type="button" class="btn" data-range="3600">
+                        1h
+                    </button>
+                    <button type="button" class="btn" data-range="7200">
+                        2h
+                    </button>
+                    <button type="button" class="btn" data-range="21600">
+                        6h
+                    </button>
+                    <button type="button" class="btn active" data-range="86400">
+                        24h
+                    </button>
+                    <button type="button" class="btn" data-range="172800">
+                        48h
+                    </button>
+                    <button type="button" class="btn" data-range="604800">
+                        1 week
+                    </button>
+                    <button type="button" class="btn" data-range="2592000">
+                        1 month
+                    </button>
+                </div>
+                <div
+                    class="mode-toggle"
+                    id="mode-toggle"
+                    role="group"
+                    aria-label="Chart interaction mode"
+                >
+                    <button
+                        type="button"
+                        class="btn mode-btn active"
+                        data-mode="pan"
+                        title="Pan chart"
+                    >
+                        <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            aria-hidden="true"
+                            style="vertical-align: -2px; margin-right: 4px"
+                        >
+                            <path d="M5 12h14" />
+                            <polyline points="5 8 1 12 5 16" />
+                            <polyline points="19 8 23 12 19 16" /></svg
+                        >Pan
+                    </button>
+                    <button
+                        type="button"
+                        class="btn mode-btn"
+                        data-mode="select"
+                        title="Select time range"
+                    >
+                        <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            aria-hidden="true"
+                            style="vertical-align: -2px; margin-right: 4px"
+                        >
+                            <circle cx="11" cy="11" r="7" />
+                            <line x1="16.5" y1="16.5" x2="21" y2="21" /></svg
+                        >Zoom
+                    </button>
+                </div>
+                <span id="live-badge" class="live-badge">LIVE</span>
+                <button
+                    type="button"
+                    class="btn live-btn"
+                    id="live-btn"
+                    title="Jump to live view"
+                >
+                    Live
+                </button>
+                <div class="control-group">
+                    <label for="poll-interval">Poll</label>
+                    <select id="poll-interval">
+                        <option value="1">1s</option>
+                        <option value="2">2s</option>
+                        <option value="3">3s</option>
+                        <option value="5" selected>5s</option>
+                        <option value="10">10s</option>
+                        <option value="30">30s</option>
+                        <option value="60">60s</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="chart-wrap">
+                <div id="chart"></div>
+                <div id="chart-tooltip" class="chart-tooltip" aria-hidden="true"></div>
+            </div>
+
+            <p id="meta-status" class="meta-status" aria-live="polite"></p>
+
+            <div class="thresholds">
+                <div class="control-group">
+                    <label for="warn-low">Warning threshold (°C)</label>
+                    <input type="number" id="warn-low" value="70" step="0.1" />
+                </div>
+                <div class="control-group">
+                    <label for="warn-high">Critical threshold (°C)</label>
+                    <input type="number" id="warn-high" value="75" step="0.1" />
+                </div>
+            </div>
+
+            <div class="stats" id="stats">
+                <div class="stat-card">
+                    <div class="label">Current</div>
+                    <div class="value placeholder" data-stat="current">—</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Minimum</div>
+                    <div class="value placeholder" data-stat="min">—</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Maximum</div>
+                    <div class="value placeholder" data-stat="max">—</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Average</div>
+                    <div class="value placeholder" data-stat="avg">—</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Time in warning</div>
+                    <div class="value placeholder" data-stat="warn-time">—</div>
+                    <div class="stat-note" data-stat-note="warn-time">
+                        Unavailable for this range
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">Time in critical</div>
+                    <div class="value placeholder" data-stat="crit-time">—</div>
+                    <div class="stat-note" data-stat-note="crit-time">
+                        Unavailable for this range
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script src="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.iife.min.js"></script>
+        <script src="themes.js"></script>
+        <script>
+            // ── Configuration ──────────────────────────────────────────────
+
+            const { THEMES, DEFAULT_THEME, resolveTheme } = window.ThemeRegistry;
+            const THEME_STORAGE_KEY = "tempMonitor.theme";
+
+            const DEFAULTS = {
+                rangeSec: 86400,
+                pollSec: 5,
+                warnLow: 70,
+                warnHigh: 75,
+            };
+
+            const CHART_HEIGHT = 520;
+            const MIN_SELECT_SEC = 10;
+
+            function cssVar(name) {
+                return getComputedStyle(document.documentElement)
+                    .getPropertyValue(name)
+                    .trim();
+            }
+
+            function getChartColors() {
+                return {
+                    stroke: cssVar("--chart-stroke"),
+                    band: cssVar("--chart-band"),
+                    axis: cssVar("--chart-axis"),
+                    grid: cssVar("--chart-grid"),
+                };
+            }
+
+            function loadTheme() {
+                try {
+                    return resolveTheme(localStorage.getItem(THEME_STORAGE_KEY));
+                } catch {
+                    return DEFAULT_THEME;
+                }
+            }
+
+            function saveTheme(theme) {
+                localStorage.setItem(THEME_STORAGE_KEY, theme);
+            }
+
+            function applyTheme(theme) {
+                const next = resolveTheme(theme);
+                document.documentElement.dataset.theme = next;
+                saveTheme(next);
+                document
+                    .querySelectorAll("#theme-picker .theme-button")
+                    .forEach((button) => {
+                        button.setAttribute(
+                            "aria-pressed",
+                            button.dataset.theme === next,
+                        );
+                    });
+                return next;
+            }
+
+            function renderThemePicker() {
+                const picker = document.getElementById("theme-picker");
+                picker.replaceChildren();
+
+                let lastVariant = null;
+                THEMES.forEach((theme) => {
+                    if (lastVariant && lastVariant !== theme.variant) {
+                        const divider = document.createElement("span");
+                        divider.className = "theme-picker__divider";
+                        divider.setAttribute("aria-hidden", "true");
+                        picker.append(divider);
+                    }
+                    lastVariant = theme.variant;
+
+                    const button = document.createElement("button");
+                    button.type = "button";
+                    button.className = "theme-button";
+                    button.dataset.theme = theme.id;
+                    button.setAttribute("aria-label", theme.label);
+                    button.setAttribute("aria-pressed", "false");
+                    button.style.setProperty("--swatch-bg", theme.swatch[0]);
+                    button.style.setProperty("--swatch-accent", theme.swatch[1]);
+                    button.addEventListener("click", () => {
+                        applyTheme(theme.id);
+                        const win = getViewWindow();
+                        destroyChart();
+                        createChart();
+                        updateChartData(state.samples, win.from, win.to);
+                    });
+                    picker.append(button);
+                });
+            }
+
+            // ── State ──────────────────────────────────────────────────────
+
+            const state = {
+                liveMode: true,
+                rangeSec: DEFAULTS.rangeSec,
+                viewFrom: 0,
+                viewTo: 0,
+                pollSec: DEFAULTS.pollSec,
+                warnLow: DEFAULTS.warnLow,
+                warnHigh: DEFAULTS.warnHigh,
+                samples: [],
+                statistics: null,
+                meta: null,
+                chart: null,
+                pollTimer: null,
+                pan: null,
+                selectDrag: null,
+                selectMode: false,
+                fetchAbort: null,
+            };
+
+            // ── DOM ────────────────────────────────────────────────────────
+
+            const dom = {
+                errorBanner: document.getElementById("error-banner"),
+                chartWrap: document.getElementById("chart-wrap"),
+                chartEl: document.getElementById("chart"),
+                chartTooltip: document.getElementById("chart-tooltip"),
+                metaStatus: document.getElementById("meta-status"),
+                liveBadge: document.getElementById("live-badge"),
+                liveBtn: document.getElementById("live-btn"),
+                pollSelect: document.getElementById("poll-interval"),
+                warnLow: document.getElementById("warn-low"),
+                warnHigh: document.getElementById("warn-high"),
+                criticalThreshold:
+                    document.getElementById("critical-threshold"),
+                rangeButtons: document.getElementById("range-buttons"),
+                modeToggle: document.getElementById("mode-toggle"),
+                themePicker: document.getElementById("theme-picker"),
+                statEls: Object.fromEntries(
+                    [...document.querySelectorAll("[data-stat]")].map((el) => [
+                        el.dataset.stat,
+                        el,
+                    ]),
+                ),
+                statNotes: Object.fromEntries(
+                    [...document.querySelectorAll("[data-stat-note]")].map(
+                        (el) => [el.dataset.statNote, el],
+                    ),
+                ),
+            };
+
+            // ── View window ────────────────────────────────────────────────
+
+            function nowSec() {
+                return Math.floor(Date.now() / 1000);
+            }
+
+            function toEpochSec(ts) {
+                return Math.round(ts);
+            }
+
+            function getViewWindow() {
+                if (state.liveMode) {
+                    const now = nowSec();
+                    return { from: now - state.rangeSec, to: now };
+                }
+                return {
+                    from: toEpochSec(state.viewFrom),
+                    to: toEpochSec(state.viewTo),
+                };
+            }
+
+            function syncLiveBadge() {
+                dom.liveBadge.classList.toggle("visible", state.liveMode);
+                dom.liveBtn.classList.toggle("visible", !state.liveMode);
+            }
+
+            function jumpToLive() {
+                exitSelectMode();
+                state.liveMode = true;
+                syncLiveBadge();
+                setActiveRangeButton(state.rangeSec);
+                refresh();
+            }
+
+            // ── API ────────────────────────────────────────────────────────
+
+            function showError(message) {
+                dom.errorBanner.textContent = message;
+                dom.errorBanner.classList.add("visible");
+            }
+
+            function hideError() {
+                dom.errorBanner.classList.remove("visible");
+            }
+
+            async function fetchTemperatures(from, to, downsampleTo, signal) {
+                const params = new URLSearchParams({
+                    from: String(toEpochSec(from)),
+                    to: String(toEpochSec(to)),
+                    downsampleTo: String(Math.max(downsampleTo, 3)),
+                    warningThreshold: state.warnLow,
+                    criticalThreshold: state.warnHigh,
+                });
+
+                const requestURL = `/api/v3/temperature?${params}`;
+                const response = await fetch(requestURL, { signal });
+
+                if (!response.ok) {
+                    const text = await response.text();
+                    throw new Error(text || `HTTP ${response.status}`);
+                }
+                return response.json();
+            }
+
+            // ── Statistics ─────────────────────────────────────────────────
+
+            function isInWarning(v) {
+                return v >= state.warnLow && v <= state.warnHigh;
+            }
+
+            function isInCritical(v) {
+                return v >= state.warnHigh;
+            }
+
+            function durationInBand(samples, windowTo, predicate) {
+                if (samples.length === 0) return 0;
+
+                let total = 0;
+                for (let i = 0; i < samples.length - 1; i++) {
+                    if (predicate(samples[i].v)) {
+                        total += samples[i + 1].ts - samples[i].ts;
+                    }
+                }
+                const last = samples[samples.length - 1];
+                if (predicate(last.v)) {
+                    total += Math.max(0, windowTo - last.ts);
+                }
+                return total;
+            }
+
+            function formatTemp(v) {
+                return `${v.toFixed(1)} °C`;
+            }
+
+            function formatDuration(seconds) {
+                if (seconds <= 0) return "0s";
+                const h = Math.floor(seconds / 3600);
+                const m = Math.floor((seconds % 3600) / 60);
+                const s = Math.round(seconds % 60);
+                if (h > 0) return `${h}h ${m}m`;
+                if (m > 0) return `${m}m ${s}s`;
+                return `${s}s`;
+            }
+
+            function formatBytes(bytes) {
+                if (bytes < 1024) return `${bytes} B`;
+                if (bytes < 1024 * 1024) {
+                    return `${(bytes / 1024).toFixed(1)} KB`;
+                }
+                return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+            }
+
+            function formatAge(sec) {
+                if (sec == null) return "n/a";
+                if (sec < 60) return `${sec}s ago`;
+                if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+                if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+                return `${Math.floor(sec / 86400)}d ago`;
+            }
+
+            function formatCount(n) {
+                return Number(n).toLocaleString();
+            }
+
+            function setBandNotesVisible(visible) {
+                for (const key of ["warn-time", "crit-time"]) {
+                    const note = dom.statNotes[key];
+                    if (note) note.classList.toggle("visible", visible);
+                }
+            }
+
+            function renderMeta(meta) {
+                if (!meta) {
+                    dom.metaStatus.textContent = "";
+                    return;
+                }
+                if (meta.noData) {
+                    dom.metaStatus.textContent = "No data yet";
+                    return;
+                }
+                const parts = [
+                    `Source: ${meta.dataSource}`,
+                    `${formatCount(meta.processedSamples)} rows`,
+                    `last sample ${formatAge(meta.lastSampleAgeSec)}`,
+                    `DB ${formatBytes(meta.dbSizeBytes)}`,
+                ];
+                dom.metaStatus.textContent = parts.join(" · ");
+            }
+
+            function hideTooltip() {
+                dom.chartTooltip.classList.remove("visible");
+                dom.chartTooltip.setAttribute("aria-hidden", "true");
+            }
+
+            function renderStats(stats) {
+                const set = (key, text, isPlaceholder) => {
+                    const el = dom.statEls[key];
+                    el.textContent = text;
+                    el.classList.toggle("placeholder", isPlaceholder);
+                };
+
+                if (!stats) {
+                    set("current", "—", true);
+                    set("min", "—", true);
+                    set("max", "—", true);
+                    set("avg", "—", true);
+                    set("warn-time", "—", true);
+                    set("crit-time", "—", true);
+                    setBandNotesVisible(false);
+                    return;
+                }
+
+                set("current", formatTemp(stats.currentTemp), false);
+                set("min", formatTemp(stats.min), false);
+                set("max", formatTemp(stats.max), false);
+                set("avg", formatTemp(stats.mean), false);
+                if (stats.statsApproximate) {
+                    set("warn-time", "—", true);
+                    set("crit-time", "—", true);
+                    setBandNotesVisible(true);
+                } else {
+                    set("warn-time", formatDuration(stats.timeInWarning), false);
+                    set("crit-time", formatDuration(stats.timeInCritical), false);
+                    setBandNotesVisible(false);
+                }
+            }
+
+            // ── Chart ──────────────────────────────────────────────────────
+
+            function drawThresholdBands(u) {
+                const { left, top, width, height } = u.bbox;
+                const ctx = u.ctx;
+                const yMin = u.scales.y.min;
+                const yMax = u.scales.y.max;
+
+                const yWarnLow = u.valToPos(state.warnLow, "y", true);
+                const yWarnHigh = u.valToPos(state.warnHigh, "y", true);
+
+                ctx.save();
+
+                if (state.warnHigh > yMin && state.warnLow < yMax) {
+                    ctx.globalAlpha = 0.12;
+                    ctx.fillStyle = cssVar("--warning");
+                    const bandTop = Math.max(
+                        top,
+                        Math.min(yWarnLow, yWarnHigh),
+                    );
+                    const bandBottom = Math.min(
+                        top + height,
+                        Math.max(yWarnLow, yWarnHigh),
+                    );
+                    ctx.fillRect(left, bandTop, width, bandBottom - bandTop);
+                    ctx.globalAlpha = 1;
+                }
+
+                if (state.warnHigh < yMax) {
+                    ctx.globalAlpha = 0.12;
+                    ctx.fillStyle = cssVar("--danger");
+                    const critBottom = u.valToPos(state.warnHigh, "y", true);
+                    ctx.fillRect(left, top, width, critBottom - top);
+                    ctx.globalAlpha = 1;
+                }
+
+                ctx.restore();
+            }
+
+            function onSetSelect(u) {
+                if (!state.selectMode) {
+                    clearSelectRect();
+                    return;
+                }
+
+                const { left, width } = u.select;
+                if (width <= 0) return;
+
+                const from = u.posToVal(left, "x");
+                const to = u.posToVal(left + width, "x");
+                clearSelectRect();
+
+                if (Math.abs(to - from) >= MIN_SELECT_SEC) {
+                    applySelectedRange(from, to);
+                }
+            }
+
+            function createChart() {
+                const width = dom.chartWrap.clientWidth;
+                const colors = getChartColors();
+
+                const opts = {
+                    width,
+                    height: CHART_HEIGHT,
+                    series: [
+                        {}, // x-axis (timestamps)
+                        {
+                            label: "Min",
+                            stroke: "rgba(0,0,0,0)",
+                            width: 1,
+                            points: { show: false },
+                        },
+                        {
+                            label: "Max",
+                            stroke: "rgba(0,0,0,0)",
+                            width: 1,
+                            fill: colors.band,
+                            points: { show: false },
+                        },
+                        {
+                            label: "Average",
+                            stroke: colors.stroke,
+                            width: 1.5,
+                            points: { show: false },
+                        },
+                    ],
+                    // uPlot bands are [upper, lower] — max then min
+                    bands: [{ series: [2, 1] }],
+                    scales: {
+                        x: { time: true },
+                        y: { auto: true },
+                    },
+                    axes: [
+                        {
+                            stroke: colors.axis,
+                            grid: { stroke: colors.grid },
+                            ticks: { stroke: colors.grid },
+                        },
+                        {
+                            stroke: colors.axis,
+                            grid: { stroke: colors.grid },
+                            ticks: { stroke: colors.grid },
+                            label: "°C",
+                        },
+                    ],
+                    cursor: {
+                        drag: {
+                            x: false,
+                            y: false,
+                            setScale: false,
+                        },
+                    },
+                    select: { show: true, over: true },
+                    hooks: {
+                        drawAxes: [drawThresholdBands],
+                        setSelect: [onSetSelect],
+                        setCursor: [onSetCursor],
+                    },
+                };
+
+                state.chart = new uPlot(opts, [[], [], [], []], dom.chartEl);
+            }
+
+            function onSetCursor(u) {
+                if (state.pan || state.selectDrag || state.selectMode) {
+                    hideTooltip();
+                    return;
+                }
+
+                const idx = u.cursor.idx;
+                if (idx == null || idx < 0 || !u.data[0] || !u.data[0].length) {
+                    hideTooltip();
+                    return;
+                }
+
+                const ts = u.data[0][idx];
+                const min = u.data[1][idx];
+                const max = u.data[2][idx];
+                const mean = u.data[3][idx];
+                if (ts == null || mean == null) {
+                    hideTooltip();
+                    return;
+                }
+
+                const timeStr = new Date(ts * 1000).toLocaleString();
+                dom.chartTooltip.innerHTML =
+                    `<div>${timeStr}</div>` +
+                    `<div>Min ${formatTemp(min)}</div>` +
+                    `<div>Max ${formatTemp(max)}</div>` +
+                    `<div>Avg ${formatTemp(mean)}</div>`;
+
+                const over = chartOverEl();
+                if (!over) {
+                    hideTooltip();
+                    return;
+                }
+                const overRect = over.getBoundingClientRect();
+                const wrapRect = dom.chartWrap.getBoundingClientRect();
+                let left = overRect.left - wrapRect.left + (u.cursor.left || 0) + 12;
+                let top = overRect.top - wrapRect.top + (u.cursor.top || 0) + 12;
+
+                dom.chartTooltip.classList.add("visible");
+                dom.chartTooltip.setAttribute("aria-hidden", "false");
+
+                const tipW = dom.chartTooltip.offsetWidth;
+                const tipH = dom.chartTooltip.offsetHeight;
+                if (left + tipW > wrapRect.width - 4) {
+                    left = Math.max(4, left - tipW - 24);
+                }
+                if (top + tipH > wrapRect.height - 4) {
+                    top = Math.max(4, top - tipH - 24);
+                }
+                dom.chartTooltip.style.left = `${left}px`;
+                dom.chartTooltip.style.top = `${top}px`;
+            }
+
+            function updateChartData(samples, windowFrom, windowTo) {
+                const xs = samples.map((s) => s.ts);
+                const mins = samples.map((s) => s.min);
+                const maxs = samples.map((s) => s.max);
+                const means = samples.map((s) => s.mean);
+
+                state.chart.setData([xs, mins, maxs, means]);
+                state.chart.setScale("x", {
+                    min: toEpochSec(windowFrom),
+                    max: toEpochSec(windowTo),
+                });
+            }
+
+            function destroyChart() {
+                hideTooltip();
+                if (state.chart) {
+                    state.chart.destroy();
+                    state.chart = null;
+                }
+            }
+
+            // ── Interaction modes: pan | select ────────────────────────────
+
+            const PAN_THRESHOLD_PX = 5;
+
+            function setInteractionMode(selectMode) {
+                state.selectMode = selectMode;
+                syncInteractionMode();
+            }
+
+            function syncInteractionMode() {
+                dom.modeToggle
+                    .querySelectorAll("[data-mode]")
+                    .forEach((btn) => {
+                        const isSelect = btn.dataset.mode === "select";
+                        btn.classList.toggle(
+                            "active",
+                            isSelect === state.selectMode,
+                        );
+                    });
+                dom.chartWrap.classList.toggle("select-mode", state.selectMode);
+                if (state.chart) {
+                    // Pan and range-select are handled via pointer events (mouse + touch).
+                    state.chart.cursor.drag.x = false;
+                    if (!state.selectMode) {
+                        clearSelectRect();
+                    }
+                }
+            }
+
+            function exitSelectMode() {
+                setInteractionMode(false);
+            }
+
+            function clearActiveRangeButton() {
+                dom.rangeButtons.querySelectorAll("button").forEach((btn) => {
+                    btn.classList.remove("active");
+                });
+            }
+
+            function applySelectedRange(from, to) {
+                state.viewFrom = toEpochSec(Math.min(from, to));
+                state.viewTo = toEpochSec(Math.max(from, to));
+                state.liveMode = false;
+                syncLiveBadge();
+                clearActiveRangeButton();
+                refresh();
+            }
+
+            function chartOverEl() {
+                return state.chart?.root.querySelector(".u-over");
+            }
+
+            // Plot-area coordinates in CSS pixels (matches uPlot setSelect / posToVal).
+            function chartPlotX(clientX) {
+                const over = chartOverEl();
+                if (!over) return 0;
+                return clientX - over.getBoundingClientRect().left;
+            }
+
+            function chartPlotSize() {
+                const over = chartOverEl();
+                if (!over) return { width: 1, height: 1 };
+                const rect = over.getBoundingClientRect();
+                return { width: rect.width, height: rect.height };
+            }
+
+            function beginPan(clientX) {
+                hideTooltip();
+                const win = getViewWindow();
+                state.pan = {
+                    startPlotX: chartPlotX(clientX),
+                    startFrom: win.from,
+                    startTo: win.to,
+                    viewFrom: win.from,
+                    viewTo: win.to,
+                    moved: false,
+                };
+                dom.chartWrap.classList.add("dragging");
+            }
+
+            function movePan(clientX) {
+                if (!state.pan || !state.chart) return;
+
+                const plotX = chartPlotX(clientX);
+
+                if (!state.pan.moved) {
+                    if (
+                        Math.abs(plotX - state.pan.startPlotX) <
+                        PAN_THRESHOLD_PX
+                    )
+                        return;
+                    state.pan.moved = true;
+                    if (state.liveMode) {
+                        state.liveMode = false;
+                        state.viewFrom = state.pan.startFrom;
+                        state.viewTo = state.pan.startTo;
+                        syncLiveBadge();
+                    }
+                }
+
+                const { width: plotWidth } = chartPlotSize();
+                const span = state.pan.startTo - state.pan.startFrom;
+                const deltaTime =
+                    -((plotX - state.pan.startPlotX) / plotWidth) * span;
+
+                state.pan.viewFrom = state.pan.startFrom + deltaTime;
+                state.pan.viewTo = state.pan.startTo + deltaTime;
+                state.chart.setScale("x", {
+                    min: state.pan.viewFrom,
+                    max: state.pan.viewTo,
+                });
+            }
+
+            function endPan() {
+                if (!state.pan) return;
+                const didMove = state.pan.moved;
+                if (didMove) {
+                    state.viewFrom = toEpochSec(state.pan.viewFrom);
+                    state.viewTo = toEpochSec(state.pan.viewTo);
+                    state.chart.setScale("x", {
+                        min: state.viewFrom,
+                        max: state.viewTo,
+                    });
+                }
+                state.pan = null;
+                dom.chartWrap.classList.remove("dragging");
+                if (didMove) refresh();
+            }
+
+            function updateSelectRect(clientX) {
+                if (!state.selectDrag || !state.chart) return;
+
+                const plotX = chartPlotX(clientX);
+                const { height: plotHeight } = chartPlotSize();
+                const left = Math.min(state.selectDrag.startPlotX, plotX);
+                const width = Math.abs(plotX - state.selectDrag.startPlotX);
+
+                state.chart.setSelect(
+                    { left, top: 0, width, height: plotHeight },
+                    false,
+                );
+            }
+
+            function beginSelect(clientX) {
+                hideTooltip();
+                state.selectDrag = {
+                    startPlotX: chartPlotX(clientX),
+                    moved: false,
+                };
+            }
+
+            function moveSelect(clientX) {
+                if (!state.selectDrag || !state.chart) return;
+
+                const plotX = chartPlotX(clientX);
+                if (!state.selectDrag.moved) {
+                    if (
+                        Math.abs(plotX - state.selectDrag.startPlotX) <
+                        PAN_THRESHOLD_PX
+                    )
+                        return;
+                    state.selectDrag.moved = true;
+                }
+
+                updateSelectRect(clientX);
+            }
+
+            function endSelect() {
+                if (!state.selectDrag) return;
+                const didMove = state.selectDrag.moved;
+                state.selectDrag = null;
+                if (didMove && state.chart) {
+                    onSetSelect(state.chart);
+                }
+            }
+
+            function clearSelectRect() {
+                state.chart?.setSelect(
+                    { left: 0, top: 0, width: 0, height: 0 },
+                    false,
+                );
+            }
+
+            function cancelInteraction() {
+                if (state.pan) endPan();
+                if (state.selectDrag) {
+                    state.selectDrag = null;
+                    clearSelectRect();
+                }
+            }
+
+            function handlePointerMove(e) {
+                if (!state.pan && !state.selectDrag) return;
+                e.preventDefault();
+
+                const events = e.getCoalescedEvents?.() ?? [e];
+                for (const ev of events) {
+                    if (state.selectMode) moveSelect(ev.clientX);
+                    else movePan(ev.clientX);
+                }
+            }
+
+            function setupInteractionHandlers() {
+                dom.chartWrap.addEventListener(
+                    "pointerdown",
+                    (e) => {
+                        if (e.button !== 0 || !state.chart) return;
+                        e.preventDefault();
+                        dom.chartWrap.setPointerCapture(e.pointerId);
+                        if (state.selectMode) beginSelect(e.clientX);
+                        else beginPan(e.clientX);
+                    },
+                    { passive: false },
+                );
+
+                dom.chartWrap.addEventListener(
+                    "pointermove",
+                    handlePointerMove,
+                    {
+                        passive: false,
+                    },
+                );
+
+                dom.chartWrap.addEventListener("pointerup", (e) => {
+                    if (!state.pan && !state.selectDrag) return;
+                    dom.chartWrap.releasePointerCapture(e.pointerId);
+                    if (state.selectMode) endSelect();
+                    else endPan();
+                });
+
+                dom.chartWrap.addEventListener("pointercancel", (e) => {
+                    dom.chartWrap.releasePointerCapture(e.pointerId);
+                    cancelInteraction();
+                });
+            }
+
+            // ── Refresh & polling ──────────────────────────────────────────
+
+            async function refresh() {
+                const { from, to } = getViewWindow();
+                const downsampleTo = dom.chartWrap.clientWidth;
+
+                if (state.fetchAbort) {
+                    state.fetchAbort.abort();
+                }
+                const controller = new AbortController();
+                state.fetchAbort = controller;
+
+                try {
+                    const apiResponse = await fetchTemperatures(
+                        from,
+                        to,
+                        downsampleTo,
+                        controller.signal,
+                    );
+                    if (controller.signal.aborted) return;
+
+                    hideError();
+                    state.samples = apiResponse.data || [];
+                    state.statistics = apiResponse.statistics;
+                    state.meta = apiResponse.meta || null;
+                    updateChartData(state.samples, from, to);
+                    renderMeta(state.meta);
+
+                    if (state.meta && state.meta.noData) {
+                        renderStats(null);
+                    } else {
+                        renderStats(apiResponse.statistics);
+                    }
+                } catch (err) {
+                    if (err && err.name === "AbortError") return;
+                    showError(`Failed to load data: ${err.message}`);
+                    renderStats(null);
+                    renderMeta(null);
+                }
+            }
+
+            function restartPolling() {
+                if (state.pollTimer) clearInterval(state.pollTimer);
+                state.pollTimer = setInterval(refresh, state.pollSec * 1000);
+            }
+
+            // ── UI bindings ────────────────────────────────────────────────
+
+            function setActiveRangeButton(rangeSec) {
+                dom.rangeButtons.querySelectorAll("button").forEach((btn) => {
+                    btn.classList.toggle(
+                        "active",
+                        Number(btn.dataset.range) === rangeSec,
+                    );
+                });
+            }
+
+            function applyThresholds() {
+                state.warnLow = Number(dom.warnLow.value);
+                state.warnHigh = Number(dom.warnHigh.value);
+                if (state.chart) {
+                    state.chart.redraw();
+                    refresh();
+                }
+            }
+
+            function bindUI() {
+                dom.liveBtn.addEventListener("click", jumpToLive);
+
+                dom.modeToggle.addEventListener("click", (e) => {
+                    const btn = e.target.closest("button[data-mode]");
+                    if (!btn) return;
+                    setInteractionMode(btn.dataset.mode === "select");
+                });
+
+                dom.rangeButtons.addEventListener("click", (e) => {
+                    const btn = e.target.closest("button[data-range]");
+                    if (!btn) return;
+                    exitSelectMode();
+                    state.rangeSec = Number(btn.dataset.range);
+                    state.liveMode = true;
+                    syncLiveBadge();
+                    setActiveRangeButton(state.rangeSec);
+                    refresh();
+                });
+
+                dom.pollSelect.addEventListener("change", () => {
+                    state.pollSec = Number(dom.pollSelect.value);
+                    restartPolling();
+                });
+
+                dom.warnLow.addEventListener("change", applyThresholds);
+                dom.warnHigh.addEventListener("change", applyThresholds);
+
+                let resizeTimer;
+                window.addEventListener("resize", () => {
+                    clearTimeout(resizeTimer);
+                    resizeTimer = setTimeout(() => {
+                        destroyChart();
+                        createChart();
+                        updateChartData(
+                            state.samples,
+                            getViewWindow().from,
+                            getViewWindow().to,
+                        );
+                        refresh();
+                    }, 150);
+                });
+            }
+
+            // ── Init ───────────────────────────────────────────────────────
+
+            function init() {
+                renderThemePicker();
+                applyTheme(loadTheme());
+                createChart();
+                setupInteractionHandlers();
+                bindUI();
+                syncLiveBadge();
+                syncInteractionMode();
+                setActiveRangeButton(state.rangeSec);
+                refresh();
+                restartPolling();
+            }
+
+            init();
+        </script>
+    </body>
+</html>
