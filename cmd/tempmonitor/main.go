@@ -465,14 +465,13 @@ func loadTemperatureData(
 	}
 
 	bucketSec := source.BucketSec()
+	processed := len(rollups) + len(pending)
+	// Fold unflushed samples into source-resolution buckets so chart points
+	// keep real min/max/mean (StitchAggregated used to emit n=1 degenerates).
+	rollups = merge.RollupBuckets(rollups, pending, bucketSec)
 	aggregated := downsampling.AggregateRollups(rollups, from, to, downsampleTo, bucketSec)
-	aggregated = merge.StitchAggregated(aggregated, pending)
 
 	stats := statistics.GenerateStatisticsFromRollups(rollups, bucketSec, lastTemp)
-	sum, count := statistics.RollupSumCount(rollups)
-	stats = statistics.MergeBufferIntoRollupStats(stats, sum, count, pending, lastTemp)
-
-	processed := len(rollups) + len(pending)
 	return aggregated, stats, processed, source, nil
 }
 
