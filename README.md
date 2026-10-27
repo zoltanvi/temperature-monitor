@@ -45,6 +45,10 @@ flowchart LR
 - [Go](https://go.dev/dl/) 1.25+ (see `go.mod`)
 - **Sampling:** Linux with `/sys/class/thermal/thermal_zone0/temp` (millidegrees Celsius)
 - **UI / API:** browser with network access to the service
+- **Runtime (approx.):** ~1 CPU core; ~**100 MB** RAM for the process 
+  - Steady state is near-idle (&lt;1–2% of one core, roughly 25–50 MB)
+  - Spikes during large raw-range queries or first-start rollup backfill
+- **Storage:** ~1GB for 1 year continuous measurement, ~85MB / month
 
 ## Quick start
 
